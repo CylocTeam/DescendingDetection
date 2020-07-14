@@ -1,6 +1,7 @@
 %% 0 - Read Data + validate uniquness
-featuers_file = dir(fullfile(DB_path,holder, building_id, bundle, device,sprintf('%s_%s_%s_%s_%s.csv',holder,building_id,bundle,device,position)));
-raw_data = readtable(fullfile(featuers_file.folder,featuers_file.name));
+filepath = fullfile(DB_path,holder, building_id, bundle, device,sprintf('%s_%s_%s_%s_%s.csv',holder,building_id,bundle,device,position));
+% featuers_file = dir(filepath);
+raw_data = readtable(filepath);
 raw_data.time = raw_data.time - raw_data.time(1);  % [sec] 
 
 [~,unq_time] = unique(raw_data.time);
@@ -21,9 +22,12 @@ features_tbl = ExtractFeatures(data_enframed,fs_new,features_struct,batch_norm);
 %% 4 - Cluster
 lbls_kmeans = (double(labels_enframed > 1)) ;  % [binary label]
 
-
-ms_features = MeanShift(table2array(features_tbl),1,1,1,1);
-class_kmeans = kmeans(ms_features,2,'Replicates',10,'Distance','cityblock');
+if do_meanshift
+    features_mat = MeanShift(table2array(features_tbl),1,1,1,1);
+else
+    features_mat = table2array(features_tbl);
+end
+class_kmeans = kmeans(features_mat,2,'Replicates',10,'Distance','cityblock');
 
 % class_kmeans = kmeans(table2array(features_tbl),2,'Replicates',10,'Distance','cityblock');
 % gmmodel = fitgmdist([table2array(features_tbl),lbls_kmeans],2);
@@ -71,8 +75,11 @@ sill_pctile = prctile(s,25);
 % ecdf(s)
 
 %% Calc Accuracy
-pdist_lbl = (lbls_kmeans == lbls_kmeans');
-pdist_kmeans = (named_class == named_class');
+% pdist_lbl = (lbls_kmeans == lbls_kmeans');
+pdist_lbl = pdist2(lbls_kmeans,lbls_kmeans,'hamming');
+% pdist_kmeans = (named_class == named_class');
+pdist_kmeans = pdist2(named_class,named_class,'hamming');
+
 N = length(lbls_kmeans);
 paired_accuracy = sum(sum(triu( pdist_lbl == pdist_kmeans))) / ((N+1)*N/2) ; 
 % accuracy = sum(named_class == lbls_kmeans) / length(lbls_kmeans);
@@ -117,7 +124,7 @@ for iis = 1:length(s_th_vec)
     p_e = miss_accuracy;
     p_sge = sum(s(named_class ~= lbls_kmeans) < s_th ) / sum(named_class ~= lbls_kmeans);
     p_egs(iis) = p_sge * p_e / p_s;
-    p_map(iis) = p_sge * p_e ;  
+    p_map(iis) = p_egs(iis) * p_s ;  % maintain NaNs  
 end
 % plot(s_th_vec, p_egs); hold all;
 
@@ -136,7 +143,7 @@ end
 % ylabel('FMAX')
 % zlabel('MAX')
 % grid minor
-% 
+% % 
 % figure;
 % for ilabel=1:3
 %     label_idxs = (class_kmeans == ilabel);

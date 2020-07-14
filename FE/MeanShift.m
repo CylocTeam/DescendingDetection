@@ -24,12 +24,14 @@ while  ~isempty(unconverged_idx) && num_iters < MAX_ITERS
     valid_neighbour_points_mat = (curr_dists <= neighbour_dist);
     curr_pts_weights_mat = kernel_fcn(curr_dists/cluster_bw);
     curr_pts_weights_mat(~valid_neighbour_points_mat) = 0;
-    curr_pts_weights_mat = curr_pts_weights_mat ./ sum(curr_pts_weights_mat,1);
+%     curr_pts_weights_mat = curr_pts_weights_mat ./ sum(curr_pts_weights_mat,1);
+    curr_pts_weights_mat = curr_pts_weights_mat ./ repmat(sum(curr_pts_weights_mat,1),...
+                                                          size(curr_pts_weights_mat,1),1);
     newPointss = curr_pts_weights_mat' * pts ;
     shiftsteps = abs(newPointss - unconverged_pts);
     pts_shifted(unconverged_idx,:) = newPointss;
     
-    has_converged = vecnorm(shiftsteps,2,2)/NumOfDims < convergence_threshold;
+    has_converged = vecnorm(shiftsteps,2,2) < convergence_threshold;
     unconverged_idx = unconverged_idx(~has_converged);
     num_iters = num_iters + 1;
     

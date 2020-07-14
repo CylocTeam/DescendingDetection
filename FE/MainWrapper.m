@@ -1,5 +1,5 @@
-utils = '';
-DB_path = '';
+utils = 'C:\Projects\DescendingDetection\FE';
+DB_path = 'C:\Projects\DescendingDetection\Database';
 close all
 addpath(genpath(DB_path))
 addpath(utils)
@@ -17,6 +17,7 @@ step_size = fix(0.2 * fs_new);
 damping = 0.5;
 fres = 3;
 batch_norm = 1;
+do_meanshift = 0;
 mefilt_labels = 0;
 efficiency_bbox = [-5,95 ; 0,90 ; 5,95 ; 5,100 ; -5,100]';
 
@@ -29,7 +30,7 @@ features_struct.    iqr.            is_used   = 1;    features_struct.iqr.args  
 features_struct.    bandwidth.      is_used   = 1;    features_struct.bandwidth.args     = {   'norm'};
 features_struct.    prctile5.       is_used   = 1;    features_struct.prctile5.args      = {5  'norm'};
 features_struct.    prctile95.      is_used   = 1;    features_struct.prctile95.args     = {95,'norm'};
-features_struct.    max_wavelet.    is_used   = 1;    features_struct.max_wavelet.args   = {1  'norm'};
+features_struct.    max_wavelet.    is_used   = 0;    features_struct.max_wavelet.args   = {1  'norm'};
 features_struct.    sma.            is_used   = 1;    features_struct.sma.args           = {   'norm'};
 features_struct.    thd.            is_used   = 1;    features_struct.thd.args           = {   'norm'};
 features_struct.    pca.            is_used   = 1;    features_struct.pca.args           = {   'norm'};
@@ -38,9 +39,12 @@ features_struct.    mean.           is_used   = 0;    features_struct.mean.args 
 
 %%
 % clear result_struct
+Npts = length(building_id_vec) * length(holder_vec) * length(bundle_vec) * length(device_vec);
 result_cell = {};
 Smap = [];
 Pmap = [];
+ctr = 1;
+wb = waitbar(0,'start');
 for ibuilding=1:length(building_id_vec)
     building_id = building_id_vec{ibuilding};
     
@@ -56,6 +60,7 @@ for ibuilding=1:length(building_id_vec)
                 for iposition=1:length(position_vec)
                     position = position_vec{iposition};
                     
+                    ctr = ctr + 1;
                     try
                         % close all
                         Main;  
@@ -67,6 +72,7 @@ for ibuilding=1:length(building_id_vec)
                         continue
                     end
                 end
+                waitbar(ctr/Npts,wb,sprintf('%.2f[%%] completed',ctr/Npts*100));
             end
         end
     end
@@ -79,11 +85,11 @@ end
 
 result_tbl = cell2table(result_cell,'VariableNames',{'building','holder','bundle','device','position','recall','false_alarm','acuuracy','error_imbalance','s25'});
 
-accum_tbl = [accum_tbl , struct('features',features_struct,...
-                                'result_table',result_tbl,...
-                                'pctg590',sum(result_tbl.recall > 90 & result_tbl.false_alarm < 5) / size(result_tbl,1) * 100,...
-                                'top_pctg', sum(inpolygon(result_tbl.error_imbalance,100*result_tbl.acuuracy,...
-                                                          efficiency_bbox(1,:),efficiency_bbox(2,:)))/size(result_tbl,1)*100) ];
+% accum_tbl = [accum_tbl , struct('features',features_struct,...
+%                                 'result_table',result_tbl,...
+%                                 'pctg590',sum(result_tbl.recall > 90 & result_tbl.false_alarm < 5) / size(result_tbl,1) * 100,...
+%                                 'top_pctg', sum(inpolygon(result_tbl.error_imbalance,100*result_tbl.acuuracy,...
+%                                                           efficiency_bbox(1,:),efficiency_bbox(2,:)))/size(result_tbl,1)*100) ];
     
 % calc ROC for s25
 is_efficient = inpolygon(result_tbl.error_imbalance,100*result_tbl.acuuracy,...

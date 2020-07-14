@@ -20,6 +20,7 @@ func_names = fieldnames(feature_bank);
 
 %% normalize data
 % calc |a|
+% acc_norm = vecnorm(acc_data,2,2);
 acc_norm = vecnorm(acc_data,2,2);
 
 acc_data_ext = cat ( 2, acc_data , acc_norm );
@@ -58,10 +59,13 @@ features(end,:) = features(end-1,:) ;   % because of 0 padding at buffer()
 
 %%
 if batch_norm
-    features = (features - mean(features,1))./ std(features,[],1);
+%     features = (features - mean(features,1))./ std(features,[],1);
+    features = BatchNormalize(features,1);
 end
 
-std_idx = contains(all_headers,'std_norm');
+% std_idx = contains(all_headers,'std_norm');
+std_idx = ismember(all_headers,'std_norm');
+
 if any(std_idx)  % actualy should by exacly single "1"
     min_std = prctile(features(:,std_idx),20);         % assume lower 10% of std is stay
     features(features(:,std_idx) < min_std ,:) = 0;
@@ -69,7 +73,8 @@ if any(std_idx)  % actualy should by exacly single "1"
 end
 
 if batch_norm  % again
-    features = (features - mean(features,1))./ std(features,[],1);
+%     features = (features - mean(features,1))./ std(features,[],1);
+      features = BatchNormalize(features,1);
 end
 
 features =  array2table(features,'VariableNames',all_headers);
@@ -101,8 +106,8 @@ if size(mad_val,1) < size(mad_val,2)
 end
 end
 function [pctl]      = CalcPctile(x,pct,prop)
-x = x - mean(x,1);
-
+% x = x - mean(x,1);
+x = ReduceMean(x,1);
 if strcmp(prop,'full')
     dims = 1:4;
 else    % norm
@@ -125,7 +130,8 @@ if size(iqr,1) < size(iqr,2)
 end
 end
 function [max_coeff] = CalcWaveletCoeffs(x,nw,prop)
-x = x - mean(x,1);
+% x = x - mean(x,1);
+x = ReduceMean(x,1);
 
 if strcmp(prop,'full')
     dims = 1:4;
@@ -144,7 +150,9 @@ for icol=1:size(x,2)
         c(iwin,icol,:) = wavedec(x(:,icol,iwin), Ncoeffs,Lo_D,Hi_D);
     end
 end
-[~,max_coeff] = maxk(c,nw,3);
+% [~,max_coeff] = maxk(c,nw,3);
+[~,max_coeff] = max(c,[],3);
+
 if size(max_coeff,1) < size(max_coeff,2)
     max_coeff = max_coeff';
 end
@@ -189,7 +197,6 @@ for icol=1:size(X,2)
     end
 end
 
-lgds = {'bandwidth'};
 end
 function [sma]       = CalcSMA(xyz,prop)
 
@@ -204,7 +211,9 @@ sma(end) = sma(end-1);  % because of 0 padding of buffer
 
 end
 function [thd_x]     = CalcTHD(x,fs,prop)
-x = x - mean(x,1);
+% x = x - mean(x,1);
+x = ReduceMean(x,1);
+
 if strcmp(prop,'full')
     dims = 1:4;
 else    % norm
@@ -221,7 +230,9 @@ thd_x(isinf(thd_x) | isnan(thd_x)) = -30;
 thd_x = movvar(thd_x,9,1);
 end
 function [tsquared]  = CalcPCA(x,prop)
-x = x - mean(x,1);
+% x = x - mean(x,1);
+x = ReduceMean(x,1);
+
 if strcmp(prop,'full')
     dims = 1:4;
 else    % norm
@@ -259,7 +270,7 @@ for iwin=1:size(x,3)
         curr_x = x(:,icol,iwin);
         detrend_x = detrend(curr_x);
         
-        curr_v = cumtrapz(1/fs,detrend_x);
+        curr_v = cumtrapz(0:1/fs:(length(detrend_x)-1)/fs,detrend_x);
         mean_v(iwin,icol) = mean(curr_v);
         
     end
