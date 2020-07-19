@@ -18,24 +18,26 @@ damping = 0.5;
 fres = 3;
 batch_norm = 1;
 do_meanshift = 0;
+threshold_flipping = 1;
+s_th_opt = 0.06;
 mefilt_labels = 0;
 efficiency_bbox = [-5,95 ; 0,90 ; 5,95 ; 5,100 ; -5,100]';
 
 features_struct = struct();
-features_struct.    std.            is_used   = 1;    features_struct.std.args           = {   'norm'};
-features_struct.    fmax.           is_used   = 1;    features_struct.fmax.args          = {1, 'norm'};
+features_struct.    std.            is_used   = 1;    features_struct.std.args           = {   'sphere'};
+features_struct.    fmax.           is_used   = 1;    features_struct.fmax.args          = {1, 'norm'  };
 features_struct.    mad0.           is_used   = 1;    features_struct.mad0.args          = {   'norm'};
-features_struct.    mad1.           is_used   = 1;    features_struct.mad1.args          = {   'norm'};
-features_struct.    iqr.            is_used   = 1;    features_struct.iqr.args           = {   'norm'};
+features_struct.    mad1.           is_used   = 1;    features_struct.mad1.args          = {   'norm'  };
+features_struct.    iqr.            is_used   = 1;    features_struct.iqr.args           = {   'norm'  };
 features_struct.    bandwidth.      is_used   = 1;    features_struct.bandwidth.args     = {   'norm'};
-features_struct.    prctile5.       is_used   = 1;    features_struct.prctile5.args      = {5  'norm'};
-features_struct.    prctile95.      is_used   = 1;    features_struct.prctile95.args     = {95,'norm'};
-features_struct.    max_wavelet.    is_used   = 0;    features_struct.max_wavelet.args   = {1  'norm'};
-features_struct.    sma.            is_used   = 1;    features_struct.sma.args           = {   'norm'};
-features_struct.    thd.            is_used   = 1;    features_struct.thd.args           = {   'norm'};
+features_struct.    prctile5.       is_used   = 1;    features_struct.prctile5.args      = {5  'norm'  };
+features_struct.    prctile95.      is_used   = 1;    features_struct.prctile95.args     = {95,'norm'  };
+features_struct.    max_wavelet.    is_used   = 0;    features_struct.max_wavelet.args   = {1  'norm'  };
+features_struct.    sma.            is_used   = 1;    features_struct.sma.args           = {   'norm'  };
+features_struct.    thd.            is_used   = 1;    features_struct.thd.args           = {   'norm'  };
 features_struct.    pca.            is_used   = 1;    features_struct.pca.args           = {   'norm'};
-features_struct.    trend.          is_used   = 1;    features_struct.trend.args         = {   'norm'};
-features_struct.    mean.           is_used   = 0;    features_struct.mean.args          = {   'norm'};
+features_struct.    trend.          is_used   = 1;    features_struct.trend.args         = {   'norm'  };
+features_struct.    mean.           is_used   = 1;    features_struct.mean.args          = {   [5,6]   };
 
 %%
 % clear result_struct
@@ -43,6 +45,8 @@ Npts = length(building_id_vec) * length(holder_vec) * length(bundle_vec) * lengt
 result_cell = {};
 Smap = [];
 Pmap = [];
+load('feature_struct.mat')
+
 ctr = 1;
 wb = waitbar(0,'start');
 for ibuilding=1:length(building_id_vec)
@@ -60,18 +64,22 @@ for ibuilding=1:length(building_id_vec)
                 for iposition=1:length(position_vec)
                     position = position_vec{iposition};
                     
-                    ctr = ctr + 1;
                     try
                         % close all
-                        Main;  
-                            result_cell(end+1,:) = { building_id , holder, bundle, device, position, recall, far, accuracy,error_imbalance, sill_pctile};
-                            Smap = [ Smap ; p_egs];  
-                            Pmap = [ Pmap ; p_map];
+                        
+%                         features_tbl = feature_struct.(building_id).(holder).(bundle).(device).(position);
+                        Main;
+                        result_cell(end+1,:) = { building_id , holder, bundle, device, position, recall, far, accuracy,error_imbalance, sill_pctile};
+                        Smap = [ Smap ; p_egs];
+                        Pmap = [ Pmap ; p_map];
+                        % keep feature table
+%                         feature_struct.(building_id).(holder).(bundle).(device).(position) = features_tbl;
                     catch
                         disp({ building_id , holder, bundle, device, position})
                         continue
                     end
                 end
+                ctr = ctr + 1;
                 waitbar(ctr/Npts,wb,sprintf('%.2f[%%] completed',ctr/Npts*100));
             end
         end
@@ -81,7 +89,7 @@ end
 % clr = colormap('jet');
 % clr = clr(fix(linspace(1,size(clr,1),length(holder_vec))),:);
 % clr_by_criteria = clr(findgroups(result_tbl.holder),:);
-
+% save('feature_struct.mat','feature_struct')
 
 result_tbl = cell2table(result_cell,'VariableNames',{'building','holder','bundle','device','position','recall','false_alarm','acuuracy','error_imbalance','s25'});
 
@@ -98,8 +106,6 @@ top_pctg = sum(is_efficient) / length(is_efficient);
 [tpr,fpr,thr] = roc(is_efficient',result_tbl.s25');  
 s25_recall_0fa = 100*tpr(find(fpr==0,1,'last'));
 min_fa_thr = thr(find(fpr==0,1,'last'));
-
-% calc threshold margin - 
 
 % figure(1)
 % scatter3(result_tbl.false_alarm, result_tbl.recall,result_tbl.s25,[],result_tbl.s25,'filled')
@@ -133,36 +139,27 @@ colorbar
 
 %% 
 
-figure; imagesc('XData',s_th_vec,'CData',Smap);%(Smap(:,end)<0.5,:))
+% figure; imagesc('XData',s_th_vec,'CData',Smap);%(Smap(:,end)<0.5,:))
 
-clear profitabillity_pctg_unbiased
 for icol=1:size(Smap,2)
     curr_s_unb = Smap(:,icol);
-    profitabillity_pctg_unbiased(icol) = mean(curr_s_unb(~isnan(curr_s_unb)) > 0.5 ); % unbiased
-    profitabillity(icol)               = mean(curr_s_unb(~isnan(curr_s_unb))) - 0.5; 
+    profitabillity(icol) = mean(curr_s_unb(~isnan(curr_s_unb))) - 0.5; 
 end
+ 
+% figure; imagesc('XData',s_th_vec,'CData',Pmap);%(Smap(:,end)<0.5,:))
+% figure; scatter(Pmap(:,end),result_tbl.s25,'o','filled'); grid on; grid minor
 
-figure; plot(s_th_vec,100*profitabillity_pctg_unbiased,'LineWidth',2)
-hold all
-        yyaxis right
-        plot(s_th_vec, 100*profitabillity,'LineWidth',2)
-grid minor
-grid on
-
-
-%% 
-figure; imagesc('XData',s_th_vec,'CData',Pmap);%(Smap(:,end)<0.5,:))
-
-clear profitabillity_pctg_unbiased
 for icol=1:size(Pmap,2)
     curr_s_unb = Pmap(:,icol);
-    profitabillity_pctg_unbiased(icol) = mean(curr_s_unb(~isnan(curr_s_unb)) > 0.5 ); % unbiased
-    profitabillity(icol)               = mean(curr_s_unb(~isnan(curr_s_unb))) - 0.5; 
+    tot_conditional_share(icol) = mean(curr_s_unb(~isnan(curr_s_unb)) ./ (1-result_tbl.acuuracy(~isnan(curr_s_unb)))); 
 end
-
-figure; plot(s_th_vec,100*profitabillity_pctg_unbiased,'LineWidth',2)
-hold all
-        yyaxis right
-        plot(s_th_vec, 100*profitabillity,'LineWidth',2)
-grid minor
+figure; plot(s_th_vec, profitabillity)
+yyaxis('right')
+plot(s_th_vec,tot_conditional_share)
 grid on
+grid minor
+
+hold all
+yyaxis('left')
+plot(s_th_vec, profitabillity .* tot_conditional_share,'k')
+

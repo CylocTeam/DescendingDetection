@@ -21,13 +21,13 @@ func_names = fieldnames(feature_bank);
 %% normalize data
 % calc |a|
 % acc_norm = vecnorm(acc_data,2,2);
-acc_norm = vecnorm(acc_data,2,2);
-
-acc_data_ext = cat ( 2, acc_data , acc_norm );
+% acc_norm = vecnorm(acc_data,2,2);
+[acc_azi, acc_elev, acc_norm] = cart2sph(acc_data(:,1,:),acc_data(:,2,:),acc_data(:,3,:));
+acc_data_ext = cat ( 2, acc_data , acc_norm , unwrap(acc_azi) , unwrap(acc_elev) );
 
 %% calc features
 fnames = fieldnames( feature_usage_struct );
-lgd_types = {'x','y','z','norm'};
+lgd_types = {'x','y','z','norm','azi','elev'};
 features = [];
 all_headers = {};
 
@@ -40,11 +40,8 @@ for ifunc=1:length(fnames)
         continue
     end
     
-    if strcmp(curr_feature_struct.args{end},'full')
-        feature_headers = cellfun(@(t) [curr_name,'_',t],lgd_types,'UniformOutput',false);
-    else
-        feature_headers = [curr_name,'_',lgd_types{4}];
-    end
+    dims = ParseInputDimentions(curr_feature_struct.args{end});
+    feature_headers = cellfun(@(t) [curr_name,'_',t],lgd_types(dims),'UniformOutput',false);
     
     % calc_features
     curr_features =  feature_bank.(curr_name)(acc_data_ext,curr_feature_struct.args{:});
@@ -82,64 +79,45 @@ features =  array2table(features,'VariableNames',all_headers);
 end
 
 function [std_val]   = CalcSTD(x,prop)
+dims = ParseInputDimentions(prop);
 
-if strcmp(prop,'full')
-    dims = 1:4;
-else    % norm
-    dims = 4;
-end
 std_val = squeeze(std(x(:,dims,:),[],1));
 if size(std_val,1) < size(std_val,2)
     std_val = std_val';
 end
 end
 function [mad_val]   = CalcMad(x,flag,prop)
+dims = ParseInputDimentions(prop);
 
-if strcmp(prop,'full')
-    dims = 1:4;
-else    % norm
-    dims = 4;
-end
 mad_val = squeeze(mad(x(:,dims,:),flag,1));
 if size(mad_val,1) < size(mad_val,2)
     mad_val = mad_val';
 end
 end
 function [pctl]      = CalcPctile(x,pct,prop)
+dims = ParseInputDimentions(prop);
+
 % x = x - mean(x,1);
 x = ReduceMean(x,1);
-if strcmp(prop,'full')
-    dims = 1:4;
-else    % norm
-    dims = 4;
-end
 pctl = squeeze(prctile(x(:,dims,:),pct,1))';
 if size(pctl,1) < size(pctl,2)
     pctl = pctl';
 end
 end
 function [iqr]       = CalcIQR(x,prop)
-if strcmp(prop,'full')
-    dims = 1:4;
-else    % norm
-    dims = 4;
-end
+dims = ParseInputDimentions(prop);
+
 iqr = squeeze(prctile(x(:,dims,:),75,1) - prctile(x(:,dims,:),25,1));
 if size(iqr,1) < size(iqr,2)
     iqr = iqr';
 end
 end
 function [max_coeff] = CalcWaveletCoeffs(x,nw,prop)
+dims = ParseInputDimentions(prop);
+
 % x = x - mean(x,1);
 x = ReduceMean(x,1);
-
-if strcmp(prop,'full')
-    dims = 1:4;
-else    % norm
-    dims = 4;
-end
 [Lo_D,Hi_D] = wfilters('haar','d');
-
 [N,M,L] = size(x);
 Ncoeffs = fix(log2(N));
 x = x(:,dims,:);
@@ -159,11 +137,7 @@ end
 
 end
 function [bw]        = CalcBandWidth(x,fs,prop)
-if strcmp(prop,'full')
-    dims = 1:4;
-else    % norm
-    dims = 4;
-end
+dims = ParseInputDimentions(prop);
 
 [~,fmax_idx,X] = CalcFmax(x,fs,1,prop);
 bw_drop = 3;
@@ -211,14 +185,10 @@ sma(end) = sma(end-1);  % because of 0 padding of buffer
 
 end
 function [thd_x]     = CalcTHD(x,fs,prop)
+dims = ParseInputDimentions(prop);
+
 % x = x - mean(x,1);
 x = ReduceMean(x,1);
-
-if strcmp(prop,'full')
-    dims = 1:4;
-else    % norm
-    dims = 4;
-end
 x = x(:,dims,:);
 clear thd_x
 for icol=1:size(x,2)
@@ -230,14 +200,10 @@ thd_x(isinf(thd_x) | isnan(thd_x)) = -30;
 thd_x = movvar(thd_x,9,1);
 end
 function [tsquared]  = CalcPCA(x,prop)
-% x = x - mean(x,1);
-x = ReduceMean(x,1);
+dims = ParseInputDimentions(prop);
 
-if strcmp(prop,'full')
-    dims = 1:4;
-else    % norm
-    dims = 4;
-end
+% x = x - mean(x,1);
+% x = ReduceMean(x,1);
 x = x(:,dims,:);
 clear tsquared
 for icol=1:size(x,2)
@@ -246,22 +212,16 @@ for icol=1:size(x,2)
 end
 end
 function [mn]        = CalcMean(x,prop)
-if strcmp(prop,'full')
-    dims = 1:4;
-else    % norm
-    dims = 4;
-end
+dims = ParseInputDimentions(prop);
+
 mn = squeeze(mean(x(:,dims,:),1));
 if size(mn,1) < size(mn,2)
     mn = mn';
 end
 end
 function [trend_std]      = CalcTrend(x,fs,prop)
-if strcmp(prop,'full')
-    dims = 1:4;
-else    % norm
-    dims = 4;
-end
+dims = ParseInputDimentions(prop);
+
 x = x(:,dims,:);
 
 clear mean_v

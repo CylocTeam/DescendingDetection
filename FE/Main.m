@@ -32,36 +32,7 @@ class_kmeans = kmeans(features_mat,2,'Replicates',10,'Distance','cityblock');
 % class_kmeans = kmeans(table2array(features_tbl),2,'Replicates',10,'Distance','cityblock');
 % gmmodel = fitgmdist([table2array(features_tbl),lbls_kmeans],2);
 
-%%
-% [~,max_avg_norm_idx] = max(splitapply(@(x) mean(vecnorm(x,1,2)),table2array(features_tbl),class_kmeans));
-% is_down_class = (class_kmeans == max_avg_norm_idx);  % assume 1st point has label "0"
-
-% [Fx,Fy] = gradient(table2array(features_tbl));
-% figure; 
-% % plot(10*gradient(features_tbl.std_norm).*features_tbl.std_norm)
-% % plot(10*movvar(gradient(features_tbl.std_norm).*features_tbl.std_norm,25))
-% hold all
-% plot(labels_enframed)
-% 
-% figure; 
-% plot(vecnorm(Fx,2,2).*features_tbl.std_norm)
-% hold all
-% plot(features_tbl.std_norm)
-% plot(labels_enframed)
-% 
-% 
-% figure; 
-% plot(vecnorm(Fx,2,2))
-% hold all
-% plot(labels_enframed)
-
-
-% post proccess - rename classes
-% [~,max_std_idx] = max(features_tbl.std_norm);
-% is_down_class = (class_kmeans == class_kmeans(max_std_idx)); 
-% if is_down_class(1)   
-%     is_down_class = ~is_down_class;
-% end
+%% 5 naming
 is_down_class = (class_kmeans ~= class_kmeans(1));  % assume 1st point has label "0"
 named_class = double(is_down_class);
 
@@ -70,9 +41,16 @@ if mefilt_labels
     named_class = medfilt1(named_class,...
                            floor( 4.5 / (step_size/fs_new) / 2)*2 + 1);  % closest odd number of x is:  1 + 2*floor(x/2)
 end
-[s] = silhouette(table2array(features_tbl),class_kmeans,'cityblock');
+[s] = silhouette(table2array(features_tbl),named_class,'cityblock');
 sill_pctile = prctile(s,25);
 % ecdf(s)
+
+if threshold_flipping
+    named_class(s<s_th_opt) = 1 - named_class(s<s_th_opt);
+    named_class(1) = 0;
+    [s] = silhouette(table2array(features_tbl),named_class,'cityblock');
+    sill_pctile = prctile(s,25);   
+end
 
 %% Calc Accuracy
 % pdist_lbl = (lbls_kmeans == lbls_kmeans');
@@ -101,7 +79,7 @@ error_imbalance = ( cm(2,1) - cm(1,2) ) / length(lbls_kmeans) * 100;
 % plot(s,'.k')
 % ylim([-2 5])
 % grid minor
-% i=1;
+% 1;
 
 % figure; 
 % % ksdensity(s(named_class == lbls_kmeans),'Bandwidth',0.02,'Kernel','epanechnikov')  % accuracy
@@ -124,17 +102,20 @@ for iis = 1:length(s_th_vec)
     p_e = miss_accuracy;
     p_sge = sum(s(named_class ~= lbls_kmeans) < s_th ) / sum(named_class ~= lbls_kmeans);
     p_egs(iis) = p_sge * p_e / p_s;
+%alt.->p_sge(iis) = sum(named_class(s<s_th) ~= lbls_kmeans(s<s_th)) / length(named_class(s<s_th) ~= lbls_kmeans(s<s_th)) ; 
     p_map(iis) = p_egs(iis) * p_s ;  % maintain NaNs  
 end
-% plot(s_th_vec, p_egs); hold all;
+% plot(s_th_vec, p_egs); hold all; plot(s_th_vec, p_map)
 
 
 %% Plot Scatter for 2 features
+% figure; plot(features_tbl.std_elev); hold all; plot(labels_enframed)
+% 
 % figure;
 % for ilabel=0:2
 %     label_idxs = (labels_enframed == ilabel);
 %     try
-%         scatter3(features_tbl.std_norm(label_idxs),features_tbl.fmax_norm(label_idxs),features_tbl.pca_norm(label_idxs),'o','filled'); hold all
+%         scatter3(features_tbl.std_norm(label_idxs),features_tbl.std_azi(label_idxs),features_tbl.std_elev(label_idxs),'o','filled'); hold all
 %     catch
 %         scatter (features_tbl.std_norm(label_idxs),features_tbl.fmax_norm(label_idxs),'o','filled'); hold all
 %     end
@@ -148,7 +129,7 @@ end
 % for ilabel=1:3
 %     label_idxs = (class_kmeans == ilabel);
 %     try
-%         scatter3(features_tbl.std_norm(label_idxs),features_tbl.fmax_norm(label_idxs),features_tbl.pca_norm(label_idxs),'o','filled'); hold all
+%         scatter3(features_tbl.std_norm(label_idxs),features_tbl.std_azi(label_idxs),features_tbl.std_elev(label_idxs),'o','filled'); hold all
 %     catch
 %         scatter (features_tbl.std_norm(label_idxs),features_tbl.fmax_norm(label_idxs),'o','filled'); hold all
 %     end
@@ -167,7 +148,7 @@ end
 % plot(features_tbl.trend_norm); 
 % plot(conv(hamming(7)/sum(hamming(7)),features_tbl.trend_norm),'LineWidth',2)
 % plot(TwoPoleLPF(1:step_size/fs_new:size(features_tbl,1)*step_size/fs_new,features_tbl.trend_norm,0.5,damping),'LineWidth',2)
-% 
+
 % grid minor
 
 
